@@ -312,7 +312,7 @@ elif st.session_state.fase == "Bye Selectie":
     if benodigde_byes > 0:
         st.write("Selecteer wie een Bye krijgt voor de eerste ronde:")
         gekozen_byes = st.multiselect("Kies de spelers voor een Bye:", door_spelers, max_selections=benodigde_byes)
-        st.session_state.gekozen_ko_byes = gekozene_byes if 'gekozene_byes' in locals() else gekozen_byes
+        st.session_state.gekozen_ko_byes = gekozen_byes
     else:
         st.write("Aantal deelnemers komt perfect uit! Geen Byes nodig.")
         st.session_state.gekozen_ko_byes = []
@@ -372,55 +372,4 @@ elif st.session_state.fase == "Afvalronde":
                 gespeeld_val = st.checkbox("Match Klaar", value=kw["gespeeld"], key=f"ko_chk_{kw['id']}")
                 
             if s1_val != kw["score1"] or s2_val != kw["score2"] or gespielt_val != kw["gespeeld"]:
-                kw["score1"] = s1_val
-                kw["score2"] = s2_val
-                kw["gespeeld"] = gespielt_val
-                if gespielt_val:
-                    kw["winnaar"] = kw["speler1"] if s1_val > s2_val else kw["speler2"]
-                else:
-                    kw["winnaar"] = ""
-                archiveer_en_save()
-                st.rerun()
-
-    # Knop om de winnaars te verzamelen en de volgende knock-out ronde te starten
-    st.write("---")
-    alle_ko_gespeeld = all(kw["gespeeld"] for kw in st.session_state.ko_wedstrijden) if st.session_state.ko_wedstrijden else False
-    
-    if alle_ko_gespeeld:
-        if st.button("🏆 Volgende Knock-out Ronde Genereren"):
-            winnaars = [kw["winnaar"] for kw in st.session_state.ko_wedstrijden]
-            volgende_ronde_spelers = winnaars + st.session_state.gekozen_ko_byes
-            
-            # Reset de Byes voor de volgende ronde
-            st.session_state.gekozen_ko_byes = []
-            
-            if len(volgende_ronde_spelers) == 1:
-                st.balloons()
-                st.success(f"🎉 We hebben een toernooiwinnaar: **{volgende_ronde_spelers[0]}**!")
-                st.session_state.ko_wedstrijden = []
-            else:
-                nieuwe_ko = []
-                id_ko = 1
-                for i in range(0, len(volgende_ronde_spelers), 2):
-                    if i+1 < len(volgende_ronde_spelers):
-                        nieuwe_ko.append({
-                            "id": id_ko,
-                            "speler1": volgende_ronde_spelers[i],
-                            "speler2": volgende_ronde_spelers[i+1],
-                            "score1": 0,
-                            "score2": 0,
-                            "winnaar": "",
-                            "gespeeld": False
-                        })
-                        id_ko += 1
-                st.session_state.ko_wedstrijden = nieuwe_ko
-            archiveer_en_save()
-            st.rerun()
-            
-else:
-    # Opstartscherm / Instellingenfase
-    st.title("⚙️ Welkom bij het Dart Toernooi")
-    st.write("Vul in het linkermenu de instellingen en de namen van de darters in. Klik daarna op 'Start Poulefase' om het speelschema te bouwen.")
-    if st.session_state.spelers:
-        st.subheader("Huidige spelerslijst in database:")
-        st.write(", ".join([s["naam"] for s in st.session_state.spelers]))
+                kw["score1"] = s1_
