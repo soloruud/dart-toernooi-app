@@ -285,7 +285,7 @@ elif st.session_state.fase == "Bye Selectie":
             standen[w["speler2"]]["legs_voor"] += w["score2"]
             standen[w["speler2"]]["legs_tegen"] += w["score1"]
             if w["score1"] > w["score2"]: standen[w["speler1"]]["punten"] += 3
-            elif w["score2"] > w["score1"]: standen[w["wplayer2"] if "wplayer2" in w else "speler2"]["punten"] += 3
+            elif w["score2"] > w["score1"]: standen[w["speler2"]]["punten"] += 3
     
     poules_dict = {f"Poule {i+1}": [] for i in range(st.session_state.aantal_poules)}
     for idx, speler in enumerate(st.session_state.spelers):
@@ -302,7 +302,7 @@ elif st.session_state.fase == "Bye Selectie":
     st.subheader(f"Gekwalificeerde spelers uit de poule ({len(door_spelers)} totaal):")
     st.write(", ".join(door_spelers))
     
-    # Berekening van het dichtstbijzijnde macht van 2 (2, 4, 8, 16) schema
+    # Berekening van het dichtstbijzijnde macht van 2 schema
     aantal_gekwalificeerd = len(door_spelers)
     volgende_macht_van_2 = 2**((aantal_gekwalificeerd - 1).bit_length()) if aantal_gekwalificeerd > 1 else 2
     benodigde_byes = volgende_macht_van_2 - aantal_gekwalificeerd
@@ -312,7 +312,7 @@ elif st.session_state.fase == "Bye Selectie":
     if benodigde_byes > 0:
         st.write("Selecteer wie een Bye krijgt voor de eerste ronde:")
         gekozen_byes = st.multiselect("Kies de spelers voor een Bye:", door_spelers, max_selections=benodigde_byes)
-        st.session_state.gekozen_ko_byes = gekozen_byes
+        st.session_state.gekozen_ko_byes = gekozene_byes if 'gekozene_byes' in locals() else gekozen_byes
     else:
         st.write("Aantal deelnemers komt perfect uit! Geen Byes nodig.")
         st.session_state.gekozen_ko_byes = []
@@ -382,22 +382,21 @@ elif st.session_state.fase == "Afvalronde":
                 archiveer_en_save()
                 st.rerun()
 
-    # Knop om de winnaars te verzamelen en de volgende knock-out ronde (bijv. de finale) te starten
+    # Knop om de winnaars te verzamelen en de volgende knock-out ronde te starten
     st.write("---")
     alle_ko_gespeeld = all(kw["gespeeld"] for kw in st.session_state.ko_wedstrijden) if st.session_state.ko_wedstrijden else False
     
     if alle_ko_gespeeld:
         if st.button("🏆 Volgende Knock-out Ronde Genereren"):
-            # Pak de winnaars van de net gespeelde wedstrijden + de spelers die een Bye hadden
             winnaars = [kw["winnaar"] for kw in st.session_state.ko_wedstrijden]
             volgende_ronde_spelers = winnaars + st.session_state.gekozen_ko_byes
             
-            # Reset de Byes voor de volgende ronde (iedereen speelt nu)
+            # Reset de Byes voor de volgende ronde
             st.session_state.gekozen_ko_byes = []
             
             if len(volgende_ronde_spelers) == 1:
                 st.balloons()
-                st.success(f"🎉 we hebben een toernooiwinnaar: **{volgende_ronde_spelers[0]}**!")
+                st.success(f"🎉 We hebben een toernooiwinnaar: **{volgende_ronde_spelers[0]}**!")
                 st.session_state.ko_wedstrijden = []
             else:
                 nieuwe_ko = []
@@ -421,4 +420,7 @@ elif st.session_state.fase == "Afvalronde":
 else:
     # Opstartscherm / Instellingenfase
     st.title("⚙️ Welkom bij het Dart Toernooi")
-    st.write("Vul in het linkermenu de inst
+    st.write("Vul in het linkermenu de instellingen en de namen van de darters in. Klik daarna op 'Start Poulefase' om het speelschema te bouwen.")
+    if st.session_state.spelers:
+        st.subheader("Huidige spelerslijst in database:")
+        st.write(", ".join([s["naam"] for s in st.session_state.spelers]))
