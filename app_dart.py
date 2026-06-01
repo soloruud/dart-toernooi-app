@@ -251,7 +251,7 @@ if st.session_state.fase == "Poulefase":
             gespeeld_val = st.checkbox("Gespeeld", value=w["gespeeld"], key=f"chk_{w['id']}")
             
         # Vereenvoudigde vergelijking: voorkomt NameErrors door verkeerde variabelen
-        if s1_val != w["score1"] or s2_val != w["score2"] or gespeelt_val != w["gespeeld"]:
+        if s1_val != w["score1"] or s2_val != w["score2"] or gespeeld_val != w["gespeeld"]:
             w["score1"] = s1_val
             w["score2"] = s2_val
             w["gespeeld"] = gespielt_val
