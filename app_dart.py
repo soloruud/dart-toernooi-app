@@ -250,6 +250,7 @@ if st.session_state.fase == "Poulefase":
         with col_ok:
             gespeeld_val = st.checkbox("Gespeeld", value=w["gespeeld"], key=f"chk_{w['id']}")
             
+        # Vereenvoudigde vergelijking: voorkomt NameErrors door verkeerde variabelen
         if s1_val != w["score1"] or s2_val != w["score2"] or gespielt_val != w["gespeeld"]:
             w["score1"] = s1_val
             w["score2"] = s2_val
@@ -365,11 +366,11 @@ elif st.session_state.fase == "Afvalronde":
             with col_chk:
                 gespeeld_val = st.checkbox("Match Klaar", value=kw["gespeeld"], key=f"ko_chk_{kw['id']}")
                 
-            if s1_val != kw["score1"] or s2_val != kw["score2"] or gespielt_val != kw["gespeeld"]:
+            if s1_val != kw["score1"] or s2_val != kw["score2"] or gespeeld_val != kw["gespeeld"]:
                 kw["score1"] = s1_val
                 kw["score2"] = s2_val
-                kw["gespeeld"] = gespielt_val
-                if gespielt_val:
+                kw["gespeeld"] = gespeeld_val
+                if gespeeld_val:
                     kw["winnaar"] = kw["speler1"] if s1_val > s2_val else kw["speler2"]
                 else:
                     kw["winnaar"] = ""
