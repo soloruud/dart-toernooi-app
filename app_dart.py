@@ -2,44 +2,37 @@ import streamlit as st
 import pandas as pd
 import json
 import os
+import itertools
 
-# --- 1. CONFIGURATIE & STREAMLIT SETTINGS ---
+# --- 1. CONFIGURATIE & STYLING ---
 st.set_page_config(
-    page_title="🎯 Dart Toernooi Manager Pro",
+    page_title="🎯 Dart Toernooi Manager Ultra",
     page_icon="🎯",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Volledig zwarte achtergrond en strakke dart-styling via CSS injection
+# Volledig zwarte achtergrond en strakke dart-styling via CSS
 st.markdown("""
     <style>
-    /* Achtergronden naar puur zwart */
     .stApp, [data-testid="stSidebar"], [data-testid="stHeader"] {
         background-color: #000000 !important;
         color: #FFFFFF !important;
     }
-    
-    /* Alle teksten wit */
-    h1, h2, h3, h4, h5, h6, p, label, span, .stMarkdown {
+    h1, h2, h3, h4, p, label, span, .stMarkdown {
         color: #FFFFFF !important;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        font-family: 'Segoe UI', Tahoma, sans-serif;
     }
-    
-    /* Aanpassingen voor invoervelden zodat ze leesbaar zijn op zwart */
     .stTextInput input, .stNumberInput input, .stSelectbox div {
         background-color: #111111 !important;
         color: #FFFFFF !important;
         border: 1px solid #333333 !important;
     }
-    
-    /* Knoppen styling */
     .stButton>button {
         background-color: #1a1a1a !important;
         color: #ffffff !important;
         border: 1px solid #ffcc00 !important;
         border-radius: 4px;
-        transition: all 0.3s ease;
         width: 100%;
     }
     .stButton>button:hover {
@@ -47,14 +40,9 @@ st.markdown("""
         color: #000000 !important;
         box-shadow: 0 0 10px #ffcc00;
     }
-    
-    /* Dataframe styling overschrijven voor donker thema */
     [data-testid="stDataFrame"] {
         background-color: #000000 !important;
-        border: 1px solid #222222 !important;
     }
-    
-    /* Gekleurde succes/info boxen blenden */
     .stAlert {
         background-color: #111111 !important;
         color: #ffffff !important;
@@ -63,166 +51,374 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. DATA OPSLAG & PERSISTENTIE ---
-# Slaat spelers op in een lokaal JSON-bestandje zodat ze onthouden worden!
-DATA_FILE = "dart_spelers_opslag.json"
+# --- 2. DATA OPSLAG & STATE ---
+DATA_FILE = "dart_toernooi_data.json"
 
-def laad_spelers():
+def laad_toernooi_data():
     if os.path.exists(DATA_FILE):
         try:
             with open(DATA_FILE, 'r') as f:
                 return json.load(f)
         except:
-            return []
-    return []
+            return {}
+    return {}
 
-def sla_spelers_op(spelers_lijst):
+def sla_toernooi_data(data):
     with open(DATA_FILE, 'w') as f:
-        json.dump(spelers_lijst, f, indent=4)
+        json.dump(data, f, indent=4)
 
-# Initialiseer session state
+# Initialiseer alle benodigde variabelen in de session state
+saved_data = laad_toernooi_data()
+
 if "spelers" not in st.session_state:
-    geladen_spelers = laad_spelers()
-    if not geladen_spelers:
-        # Standaard startdata als het bestand nog leeg is
-        st.session_state.spelers = [
-            {"naam": "Michael van Gerwen", "byes": 0, "punten": 12, "leg_saldo": 8},
-            {"naam": "Raymond van Barneveld", "byes": 0, "punten": 9, "leg_saldo": 4},
-            {"naam": "Luke Littler", "byes": 0, "punten": 15, "leg_saldo": 11},
-            {"naam": "Luke Humphries", "byes": 0, "punten": 6, "leg_saldo": 1},
-            {"naam": "Gerwyn Price", "byes": 1, "punten": 3, "leg_saldo": -3},
-            {"naam": "Gary Anderson", "byes": 0, "punten": 0, "leg_saldo": -6}
-        ]
-        sla_spelers_op(st.session_state.spelers)
-    else:
-        st.session_state.spelers = geladen_spelers
+    st.session_state.spelers = saved_data.get("spelers", [
+        {"naam": "Michael van Gerwen"}, {"naam": "Raymond van Barneveld"},
+        {"naam": "Luke Littler"}, {"naam": "Luke Humphries"},
+        {"naam": "Gerwyn Price"}, {"naam": "Gary Anderson"}
+    ])
+if "fase" not in st.session_state:
+    st.session_state.fase = saved_data.get("fase", "Instellingen")
+if "poule_wedstrijden" not in st.session_state:
+    st.session_state.poule_wedstrijden = saved_data.get("poule_wedstrijden", [])
+if "ko_wedstrijden" not in st.session_state:
+    st.session_state.ko_wedstrijden = saved_data.get("ko_wedstrijden", [])
+if "aantal_poules" not in st.session_state:
+    st.session_state.aantal_poules = saved_data.get("aantal_poules", 2)
+if "doorgaarders" not in st.session_state:
+    st.session_state.doorgaarders = saved_data.get("doorgaarders", 2)
+if "gekozen_ko_byes" not in st.session_state:
+    st.session_state.gekozen_ko_byes = saved_data.get("gekozen_ko_byes", [])
 
-# --- 3. HOOFDMENU & LAYOUT ---
-st.title("🎯 Dart Toernooi Manager Pro")
-st.write("Gekoppeld met GitHub & Streamlit Cloud — Volledig dynamisch poulebeheer.")
+def archiveer_en_save():
+    sync_data = {
+        "spelers": st.session_state.spelers,
+        "fase": st.session_state.fase,
+        "poule_wedstrijden": st.session_state.poule_wedstrijden,
+        "ko_wedstrijden": st.session_state.ko_wedstrijden,
+        "aantal_poules": st.session_state.aantal_poules,
+        "doorgaarders": st.session_state.doorgaarders,
+        "gekozen_ko_byes": st.session_state.gekozen_ko_byes
+    }
+    sla_toernooi_data(sync_data)
 
-# --- 4. ZIJBALK (INRICHTING & SPELERSBEHEER) ---
+# --- 3. LOGICA VOOR GENEREREN SCHEMA'S ---
+def genereer_poule_schema(poules):
+    wedstrijden = []
+    id_counter = 1
+    for poule_naam, speler_lijst in poules.items():
+        # Maak alle unieke combinaties binnen de poule (Round Robin)
+        for s1, s2 in itertools.combinations(speler_lijst, 2):
+            wedstrijden.append({
+                "id": id_counter,
+                "poule": poule_naam,
+                "speler1": s1["naam"],
+                "speler2": s2["naam"],
+                "score1": 0,
+                "score2": 0,
+                "gespeeld": False
+            })
+            id_counter += 1
+    return wedstrijden
+
+# --- 4. ZIJBALK (ALTIJD ZICHTBAAR VOOR BEHEER) ---
 with st.sidebar:
-    st.header("⚙️ Toernooi Instellingen")
-    aantal_poules = st.number_input("Aantal Poules", min_value=1, value=2, step=1)
-    doorgaarders = st.number_input("Aantal door naar afvalronde (per poule)", min_value=1, value=2, step=1)
+    st.header("🎯 Toernooi Beheer")
+    st.write(f"**Huidige Fase:** {st.session_state.fase}")
     
-    st.write("---")
-    st.header("👥 Spelersbeheer")
-    
-    # Speler Toevoegen
-    with st.form("add_speler_form", clear_on_submit=True):
-        nieuwe_speler = st.text_input("Naam Dartspeler:")
-        heeft_bye = st.checkbox("Speler heeft een Bye 🛡️")
-        submit_add = st.form_submit_button("➕ Voeg Speler Toe")
+    if st.session_state.fase == "Instellingen":
+        st.session_state.aantal_poules = st.number_input("Aantal Poules", min_value=1, value=st.session_state.aantal_poules)
+        st.session_state.doorgaarders = st.number_input("Doorgaarders per poule", min_value=1, value=st.session_state.doorgaarders)
         
-        if submit_add:
-            if nieuwe_speler.strip():
-                bestaat_al = any(s['naam'].lower() == nieuwe_speler.strip().lower() for s in st.session_state.spelers)
-                if not bestaat_al:
-                    st.session_state.spelers.append({
-                        "naam": nieuwe_speler.strip(),
-                        "byes": 1 if heeft_bye else 0,
-                        "punten": 0,
-                        "leg_saldo": 0
-                    })
-                    sla_spelers_op(st.session_state.spelers)
-                    st.success(f"🎯 {nieuwe_speler} toegevoegd & opgeslagen!")
-                    st.rerun()
-                else:
-                    st.error("Speler bestaat al!")
-            else:
-                st.warning("Vul een geldige naam in.")
-
-    # Speler Verwijderen
-    st.write("---")
-    st.subheader("🗑️ Speler Verwijderen")
-    if st.session_state.spelers:
-        opties_verwijderen = [s["naam"] for s in st.session_state.spelers]
-        te_verwijderen = st.selectbox("Kies speler om te wissen:", opties_verwijderen)
-        if st.button("❌ Verwijder Speler"):
-            st.session_state.spelers = [s for s in st.session_state.spelers if s["naam"] != te_verwijderen]
-            sla_spelers_op(st.session_state.spelers)
-            st.success(f"{te_verwijderen} succesvol gewist!")
+        st.write("---")
+        st.subheader("👥 Spelers Toevoegen")
+        nieuwe_speler = st.text_input("Naam speler:")
+        if st.button("➕ Voeg Toe"):
+            if nieuwe_speler.strip() and not any(s['naam'].lower() == nieuwe_speler.strip().lower() for s in st.session_state.spelers):
+                st.session_state.spelers.append({"naam": nieuwe_speler.strip()})
+                archiveer_en_save()
+                st.rerun()
+                
+        st.write("---")
+        st.subheader("🗑️ Speler Wissen")
+        if st.session_state.spelers:
+            wissen = st.selectbox("Kies:", [s["naam"] for s in st.session_state.spelers])
+            if st.button("❌ Verwijder"):
+                st.session_state.spelers = [s for s in st.session_state.spelers if s["naam"] != wissen]
+                archiveer_en_save()
+                st.rerun()
+                
+        if len(st.session_state.spelers) >= 2:
+            st.write("---")
+            if st.button("🚀 Start Poulefase & Schema"):
+                # Verdeel spelers over poules
+                poules = {f"Poule {i+1}": [] for i in range(st.session_state.aantal_poules)}
+                for idx, speler in enumerate(st.session_state.spelers):
+                    p_naam = f"Poule {(idx % st.session_state.aantal_poules) + 1}"
+                    poules[p_naam].append(speler)
+                
+                st.session_state.poule_wedstrijden = genereer_poule_schema(poules)
+                st.session_state.fase = "Poulefase"
+                archiveer_en_save()
+                st.rerun()
+    else:
+        if st.button("🔄 Reset Toernooi (Wis Alles)"):
+            st.session_state.fase = "Instellingen"
+            st.session_state.poule_wedstrijden = []
+            st.session_state.ko_wedstrijden = []
+            st.session_state.gekozen_ko_byes = []
+            archiveer_en_save()
             st.rerun()
 
-# --- 5. POULE-INDELING EN DYNAMISCHE STANDEN ---
-st.header("🏆 Live Poule Standen")
+# --- 5. HOOFDSCHERM LOGICA PER FASE ---
 
-if not st.session_state.spelers:
-    st.info("Voeg spelers toe in de zijbalk om het toernooi te starten.")
-else:
-    # Verdeel spelers over poules via slang-volgorde
-    poules_dict = {f"Poule {i+1}": [] for i in range(aantal_poules)}
-    for index, speler in enumerate(st.session_state.spelers):
-        poule_naam = f"Poule {(index % aantal_poules) + 1}"
-        poules_dict[poule_naam].append(speler)
-        
-    poule_kolommen = st.columns(aantal_poules)
+# --- FASE 1: POULEFASE ---
+if st.session_state.fase == "Poulefase":
+    st.title("🏆 Poulefase & Speelschema")
     
-    for idx, (poule_titel, speler_lijst) in enumerate(poules_dict.items()):
-        with poule_kolommen[idx % aantal_poules]:
-            st.subheader(f"🥇 {poule_titel}")
-            
-            if not speler_lijst:
-                st.write("_Geen spelers in deze poule_")
-                continue
-                
-            # Sortering op Punten (eerst) en Leg Saldo (tweede als tie-breaker)
-            gesorteerd = sorted(speler_lijst, key=lambda x: (x["punten"], x["leg_saldo"]), reverse=True)
+    # Bereken de actuele standen live op basis van handmatig ingevulde wedstrijden
+    standen = {s["naam"]: {"punten": 0, "legs_voor": 0, "legs_tegen": 0} for s in st.session_state.spelers}
+    for w in st.session_state.poule_wedstrijden:
+        if w["gespeeld"]:
+            s1, s2 = w["speler1"], w["speler2"]
+            standen[s1]["legs_voor"] += w["score1"]
+            standen[s1]["legs_tegen"] += w["score2"]
+            standen[s2]["legs_voor"] += w["score2"]
+            standen[s2]["legs_tegen"] += w["score1"]
+            if w["score1"] > w["score2"]:
+                standen[s1]["punten"] += 3
+            elif w["score2"] > w["score1"]:
+                standen[s2]["punten"] += 3
+            else:
+                standen[s1]["punten"] += 1
+                standen[s2]["punten"] += 1
+
+    # Poules Dict bouwen voor weergave
+    poules_dict = {f"Poule {i+1}": [] for i in range(st.session_state.aantal_poules)}
+    for idx, speler in enumerate(st.session_state.spelers):
+        p_naam = f"Poule {(idx % st.session_state.aantal_poules) + 1}"
+        s_naam = speler["naam"]
+        st_data = standen.get(s_naam, {"punten": 0, "legs_voor": 0, "legs_tegen": 0})
+        poules_dict[p_naam].append({
+            "naam": s_naam,
+            "punten": st_data["punten"],
+            "saldo": st_data["legs_voor"] - st_data["legs_tegen"]
+        })
+
+    # Toon de dynamische Poule Standen bovenin
+    st.header("📊 Live Tussenstanden")
+    poule_kolommen = st.columns(st.session_state.aantal_poules)
+    gekwalificeerde_spelers = []
+    
+    for idx, (p_titel, s_lijst) in enumerate(poules_dict.items()):
+        with poule_kolommen[idx]:
+            st.subheader(f"🟩 {p_titel}")
+            # Sorteer op punten, daarna op leg-saldo
+            gesorteerd = sorted(s_lijst, key=lambda x: (x["punten"], x["saldo"]), reverse=True)
             
             tabel_data = []
             for pos, speler in enumerate(gesorteerd):
-                weergave_naam = speler["naam"]
-                
-                # --- DYNAMISCHE ICONEN ---
+                naam_weergave = speler["naam"]
                 if pos == 0:
-                    weergave_naam = f"😊⭐ {weergave_naam}"
+                    naam_weergave = f"😊⭐ {naam_weergave}"
                 elif pos == 1:
-                    weergave_naam = f"⭐ {weergave_naam}"
-                    
-                # Bye Status tonen
-                if speler.get("byes", 0) > 0:
-                    weergave_naam += " (Bye 🛡️)"
-                    
-                # Gekwalificeerd status check
-                status = "Volgende Ronde ✅" if pos < doorgaarders else "Uitgeschakeld ❌"
+                    naam_weergave = f"⭐ {naam_weergave}"
+                
+                is_door = pos < st.session_state.doorgaarders
+                if is_door:
+                    gekwalificeerde_spelers.append(speler["naam"])
                 
                 tabel_data.append({
                     "Pos": pos + 1,
-                    "Naam": weergave_naam,
+                    "Naam": naam_weergave,
                     "Punten": speler["punten"],
-                    "Leg Saldo": speler["leg_saldo"],
-                    "Status": status
+                    "Saldo": speler["saldo"],
+                    "Status": "Door ✅" if is_door else "Afgevallen ❌"
                 })
-                
-            df = pd.DataFrame(tabel_data)
-            st.dataframe(df, hide_index=True, use_container_width=True)
+            st.dataframe(pd.DataFrame(tabel_data), hide_index=True, use_container_width=True)
 
-# --- 6. LIVE WEDSTRIJD / SCORE VERWERKING ---
-st.write("---")
-st.header("🎯 Scores & Tussenstanden Live Bijwerken")
-st.write("Wijzig hieronder de totalen. De poulestand, smileys en sterren veranderen direct live mee bovenin!")
+    # Invulbaar Speelschema Poule
+    st.write("---")
+    st.header("📝 Speelschema Poule Invullen")
+    st.write("Pas de scores aan en vink 'Gespeeld' aan om de stand hierboven direct live te updaten.")
+    
+    for w in st.session_state.poule_wedstrijden:
+        col_p, col_w1, col_sc1, col_vs, col_sc2, col_w2, col_ok = st.columns([1, 2, 1, 0.5, 1, 2, 1])
+        with col_p:
+            st.write(f"_{w['poule']}_")
+        with col_w1:
+            st.write(f"**{w['speler1']}**")
+        with col_sc1:
+            s1_val = st.number_input("Score S1", min_value=0, value=w["score1"], step=1, key=f"s1_{w['id']}", label_visibility="collapsed")
+        with col_vs:
+            st.write("vs")
+        with col_sc2:
+            s2_val = st.number_input("Score S2", min_value=0, value=w["score2"], step=1, key=f"s2_{w['id']}", label_visibility="collapsed")
+        with col_w2:
+            st.write(f"**{w['speler2']}**")
+        with col_ok:
+            gespeeld_val = st.checkbox("Gespeeld", value=w["gespeeld"], key=f"chk_{w['id']}")
+            
+        # Update waarden direct in state als er iets verandert
+        if s1_val != w["score1"] or s2_val != w["score2"] or gespielt_val != w["gespeeld"]:
+            w["score1"] = s1_val
+            w["score2"] = s2_val
+            w["gespeeld"] = gespielt_val
+            archiveer_en_save()
+            st.rerun()
 
-if st.session_state.spelers:
-    col_s1, col_s2, col_s3 = st.columns(3)
-    
-    with col_s1:
-        geselecteerde_speler = st.selectbox("Selecteer de dartspeler:", [s["naam"] for s in st.session_state.spelers], key="score_speler")
-        
-    huidige_speler_data = next(s for s in st.session_state.spelers if s["naam"] == geselecteerde_speler)
-    
-    with col_s2:
-        nieuwe_punten = st.number_input("Totaal aantal Punten:", min_value=0, value=int(huidige_speler_data["punten"]), step=1, key="score_pts")
-    with col_s3:
-        nieuw_saldo = st.number_input("Totaal Leg Saldo (+/-):", value=int(huidige_speler_data["leg_saldo"]), step=1, key="score_legs")
-        
-    if st.button("💾 Wijzigingen Opslaan & Berekenen"):
-        for s in st.session_state.spelers:
-            if s["naam"] == geselecteerde_speler:
-                s["punten"] = nieuwe_punten
-                s["leg_saldo"] = nieuw_saldo
-                break
-        sla_spelers_op(st.session_state.spelers)
-        st.success(f"Stand voor {geselecteerde_speler} succesvol bijgewerkt!")
+    st.write("---")
+    if st.button("🔥 Poulefase Sluiten & Naar Afvalronde"):
+        st.session_state.fase = "Bye Selectie"
+        archiveer_en_save()
         st.rerun()
+
+# --- FASE 2: BYE SELECTIE VOOR DE AFVALRONDE ---
+elif st.session_state.fase == "Bye Selectie":
+    st.title("🛡️ Afvalronde Inrichten & Byes")
+    
+    # Haal de geplaatste spelers opnieuw op uit de poulestanden
+    standen = {s["naam"]: {"punten": 0, "legs_voor": 0, "legs_tegen": 0} for s in st.session_state.spelers}
+    for w in st.session_state.poule_wedstrijden:
+        if w["gespeeld"]:
+            standen[w["speler1"]]["legs_voor"] += w["score1"]
+            standen[w["speler1"]]["legs_tegen"] += w["score2"]
+            standen[w["speler2"]]["legs_voor"] += w["score2"]
+            standen[w["speler2"]]["legs_tegen"] += w["score1"]
+            if w["score1"] > w["score2"]: standen[w["speler1"]]["punten"] += 3
+            elif w["score2"] > w["score1"]: standen[w["wplayer2"] if "wplayer2" in w else "speler2"]["punten"] += 3
+    
+    poules_dict = {f"Poule {i+1}": [] for i in range(st.session_state.aantal_poules)}
+    for idx, speler in enumerate(st.session_state.spelers):
+        p_naam = f"Poule {(idx % st.session_state.aantal_poules) + 1}"
+        poules_dict[p_naam].append({"naam": speler["naam"], "punten": standen[speler["naam"]]["punten"], "saldo": standen[speler["naam"]]["legs_voor"] - standen[speler["naam"]]["legs_tegen"]})
+    
+    door_spelers = []
+    for p_titel, s_lijst in poules_dict.items():
+        gesorteerd = sorted(s_lijst, key=lambda x: (x["punten"], x["saldo"]), reverse=True)
+        for pos, speler in enumerate(gesorteerd):
+            if pos < st.session_state.doorgaarders:
+                door_spelers.append(speler["naam"])
+
+    st.subheader(f"Gekwalificeerde spelers uit de poule ({len(door_spelers)} totaal):")
+    st.write(", ".join(door_spelers))
+    
+    # Berekening van het dichtstbijzijnde macht van 2 (2, 4, 8, 16) schema
+    aantal_gekwalificeerd = len(door_spelers)
+    volgende_macht_van_2 = 2**((aantal_gekwalificeerd - 1).bit_length()) if aantal_gekwalificeerd > 1 else 2
+    benodigde_byes = volgende_macht_van_2 - aantal_gekwalificeerd
+    
+    st.info(f"Voor een perfect afvalschema hebben we een bracket van **{volgende_macht_van_2}** nodig. Dit betekent dat er **{benodigde_byes}** speler(s) een **Bye** moeten krijgen.")
+    
+    if benodigde_byes > 0:
+        st.write("Selecteer wie een Bye krijgt voor de eerste ronde:")
+        gekozen_byes = st.multiselect("Kies de spelers voor een Bye:", door_spelers, max_selections=benodigde_byes)
+        st.session_state.gekozen_ko_byes = gekozen_byes
+    else:
+        st.write("Aantal deelnemers komt perfect uit! Geen Byes nodig.")
+        st.session_state.gekozen_ko_byes = []
+
+    if st.button("🔨 Genereer Knock-out Schema"):
+        # Matchmaking: Spelers die GEEN bye hebben moeten tegen elkaar dartsen
+        spelers_met_wedstrijd = [s for s in door_spelers if s not in st.session_state.gekozen_ko_byes]
+        
+        ko_wedstrijden = []
+        id_ko = 1
+        # Koppel ze per twee aan elkaar
+        for i in range(0, len(spelers_met_wedstrijd), 2):
+            if i+1 < len(spelers_met_wedstrijd):
+                ko_wedstrijden.append({
+                    "id": id_ko,
+                    "speler1": spelers_met_wedstrijd[i],
+                    "speler2": spelers_met_wedstrijd[i+1],
+                    "score1": 0,
+                    "score2": 0,
+                    "winnaar": "",
+                    "gespeeld": False
+                })
+                id_ko += 1
+        
+        st.session_state.ko_wedstrijden = ko_wedstrijden
+        st.session_state.fase = "Afvalronde"
+        archiveer_en_save()
+        st.rerun()
+
+# --- FASE 3: AFVALRONDE (KNOCK-OUT) ---
+elif st.session_state.fase == "Afvalronde":
+    st.title("⚡ De Afvalronde (Knock-out)")
+    
+    if st.session_state.gekozen_ko_byes:
+        st.subheader("🛡️ Spelers met een Bye (stroomt automatisch door naar volgende ronde):")
+        st.write(", ".join(st.session_state.gekozen_ko_byes))
+        
+    st.write("---")
+    st.header("🎯 Live Knock-out Schema")
+    
+    if not st.session_state.ko_wedstrijden:
+        st.success("Alle knock-out rondes zijn verwerkt!")
+    else:
+        for kw in st.session_state.ko_wedstrijden:
+            col_w1, col_sc1, col_vs, col_sc2, col_w2, col_chk = st.columns([2, 1, 0.5, 1, 2, 1])
+            with col_w1:
+                st.write(f"**{kw['speler1']}**")
+            with col_sc1:
+                s1_val = st.number_input("Score S1", min_value=0, value=kw["score1"], step=1, key=f"ko_s1_{kw['id']}", label_visibility="collapsed")
+            with col_vs:
+                st.write("vs")
+            with col_sc2:
+                s2_val = st.number_input("Score S2", min_value=0, value=kw["score2"], step=1, key=f"ko_s2_{kw['id']}", label_visibility="collapsed")
+            with col_w2:
+                st.write(f"**{kw['speler2']}**")
+            with col_chk:
+                gespeeld_val = st.checkbox("Match Klaar", value=kw["gespeeld"], key=f"ko_chk_{kw['id']}")
+                
+            if s1_val != kw["score1"] or s2_val != kw["score2"] or gespielt_val != kw["gespeeld"]:
+                kw["score1"] = s1_val
+                kw["score2"] = s2_val
+                kw["gespeeld"] = gespielt_val
+                if gespielt_val:
+                    kw["winnaar"] = kw["speler1"] if s1_val > s2_val else kw["speler2"]
+                else:
+                    kw["winnaar"] = ""
+                archiveer_en_save()
+                st.rerun()
+
+    # Knop om de winnaars te verzamelen en de volgende knock-out ronde (bijv. de finale) te starten
+    st.write("---")
+    alle_ko_gespeeld = all(kw["gespeeld"] for kw in st.session_state.ko_wedstrijden) if st.session_state.ko_wedstrijden else False
+    
+    if alle_ko_gespeeld:
+        if st.button("🏆 Volgende Knock-out Ronde Genereren"):
+            # Pak de winnaars van de net gespeelde wedstrijden + de spelers die een Bye hadden
+            winnaars = [kw["winnaar"] for kw in st.session_state.ko_wedstrijden]
+            volgende_ronde_spelers = winnaars + st.session_state.gekozen_ko_byes
+            
+            # Reset de Byes voor de volgende ronde (iedereen speelt nu)
+            st.session_state.gekozen_ko_byes = []
+            
+            if len(volgende_ronde_spelers) == 1:
+                st.balloons()
+                st.success(f"🎉 we hebben een toernooiwinnaar: **{volgende_ronde_spelers[0]}**!")
+                st.session_state.ko_wedstrijden = []
+            else:
+                nieuwe_ko = []
+                id_ko = 1
+                for i in range(0, len(volgende_ronde_spelers), 2):
+                    if i+1 < len(volgende_ronde_spelers):
+                        nieuwe_ko.append({
+                            "id": id_ko,
+                            "speler1": volgende_ronde_spelers[i],
+                            "speler2": volgende_ronde_spelers[i+1],
+                            "score1": 0,
+                            "score2": 0,
+                            "winnaar": "",
+                            "gespeeld": False
+                        })
+                        id_ko += 1
+                st.session_state.ko_wedstrijden = nieuwe_ko
+            archiveer_en_save()
+            st.rerun()
+            
+else:
+    # Opstartscherm / Instellingenfase
+    st.title("⚙️ Welkom bij het Dart Toernooi")
+    st.write("Vul in het linkermenu de inst
